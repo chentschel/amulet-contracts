@@ -1,0 +1,11 @@
+.idea
+.DS_Store
+node_modules
+dist/
+build/
+bundle.js
+geth.log
+.env.*
+.env
+zos.rinkeby.json
+zos.local.json
