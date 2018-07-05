@@ -26,9 +26,6 @@ contract AmuletToken is ERC721Token, Ownable {
     // It keeps tracking of amulet value and forged kitties.
     mapping(uint256 => AmuletInfo) amuletsMap;
 
-    // Arr of ERC721 held in escrow by user
-    mapping(address => uint256[]) depositedKittiesMap;
-
     // Used to store masks info
     struct MaskInfo {
         uint32 maskIndex;
@@ -42,9 +39,26 @@ contract AmuletToken is ERC721Token, Ownable {
     // Array of configured masks
     uint256[] masksArray;
 
+    // Max Masks add value. This is used to scale new amulates values. 
+    uint32 maxMaskValue;
+
+    // Scale fot amulate power value => (0 - AMULATE_POWER_SCALE)
+    uint256 constant AMULATE_POWER_SCALE = 10;
+
+    // Arr of ERC721 held in escrow by user
+    mapping(address => uint256[]) escrowedMap;
+
+    // escrowed kitties mappings
+    mapping(address => mapping(uint256 => uint256)) escrowedIndexMap;
+
+
+    /**
+     * Constructor
+     */
     constructor(address _kittyCore) public {
         kittyCore = KittyCoreI(_kittyCore);
     }
+
 
     /**
      * Adds or updates a gene mask
@@ -58,6 +72,9 @@ contract AmuletToken is ERC721Token, Ownable {
             
             // Add to array
             masksArray.push(_mask);
+
+            // Update max mask values;
+            maxMaskValue += _value;
         }
         maskInfoMap[_mask].maskValue = _value;
         maskInfoMap[_mask].maskResult = _result;
@@ -69,13 +86,22 @@ contract AmuletToken is ERC721Token, Ownable {
      */
     function removeMask(uint256 _mask) public onlyOwner {
         if (maskInfoMap[_mask].maskValue != 0) {
-            uint32 idx = maskInfoMap[_mask].maskIndex;
             
+            // Reorg masks array
+            uint256 maskIndex = maskInfoMap[_mask].maskIndex;
+            uint256 lastMaskIndex = masksArray.length.sub(1);
+
             // Override element bucket with last array item
             // and delete last bucket.
-            masksArray[idx] = masksArray[masksArray.length - 1];
+            masksArray[maskIndex] = masksArray[lastMaskIndex];
+            masksArray[lastMaskIndex] = 0;
             
-            delete masksArray[masksArray.length - 1];
+            masksArray.length -= 1;
+            
+            // Update max mask values
+            maxMaskValue -= maskInfoMap[_mask].maskValue;
+
+            // remove mask from mapping
             delete maskInfoMap[_mask];
         }
     }
@@ -84,24 +110,38 @@ contract AmuletToken is ERC721Token, Ownable {
      * Deposit kitty. Transfer ownership of the kittie to this contract.
      */
     function depositKitty(uint256 _kittyId) public {
-        // Transfer this asset on escrow and approve old owner 
-        // for a future withdrawal
+        // Transfer this asset ownership
         nfRegistry.transferFrom(msg.sender, address(this), _kittyId);
-        nfRegistry.approve(msg.sender, _kittyId);
+
+        // Add kittie to escrowed
+        uint256 lastIndex = escrowedMap[msg.sender].length;
+
+        escrowedIndexMap[msg.sender][_kittyId] = lastIndex;
+        escrowedMap[msg.sender].push(_kittyId);
 
         emit LogKittieDeposited(_kittyId, msg.sender);
-
-        escrowedKittiesMap[msg.sender].push(_kittyId);
     }
 
     /**
      * Withdraw kitty. Returns ownership to original depositor. 
      */
     function withdrawKitty(uint256 _kittyId) public {
-        require(escrowedKittiesMap[msg.sender][_kittieId], "msg.sender is not allowed to withdraw");
+        uint256 index = escrowedIndexMap[msg.sender][_kittieId];
+        uint256 lastIndex = escrowedMap[msg.sender].length.sub(1);
 
+        // Check if kitty is on escrow list
+        require(escrowedMap[msg.sender][index] > 0, "kitty not on escrow list");
+
+        // Transfer ownership back to msg.sender
         nfRegistry.transferFrom(address(this), msg.sender, _kittyId);
         
+        // Reorg escrowed array. 
+        escrowedMap[msg.sender][index] = escrowedMap[msg.sender][lastIndex];
+        escrowedMap[msg.sender][lastIndex] = 0;
+        escrowedMap[msg.sender].length -= 1;
+
+        delete escrowedIndexMap[msg.sender][_kittieId];
+
         emit LogKittieWithdrawed(_kittyId, msg.sender);
     }
 
@@ -109,33 +149,46 @@ contract AmuletToken is ERC721Token, Ownable {
      * Forge deposited kitties into a new Amulet granted to the msg.sender.
      */
     function forgeAmulet() public {
-        uint32 kittiesLen = escrowedKittiesMap[msg.sender].length;
-        requires(kittiesLen > 0, "theres no deposited kitties to forge an amulet");
+        uint256 escrowedLen = escrowedMap[msg.sender].length;
+        
+        requires(escrowedLen > 0, "theres no deposited kitties to forge an amulet");
 
         uint32 amuletPower = 0;
+        uint256 storage forgedKitties = [];
 
-        for (uint i = 0; i < kittiesLen; i++) {
-            uint256 kittie = escrowedKittiesMap[msg.sender][i];
+        for (uint i = 0; i < escrowedLen; i++) {
+            uint256 kittyId = escrowedMap[msg.sender][i];
 
             // Adds up all kitties' scores based on cattributes.
-            amuletPower += getKittyScore(kittie);
+            amuletPower += getKittyScore(kittyId);
+
+            // Push to forged and remove from mappinig. 
+            // We'll remove it from the escrowed array later. 
+            forgedKitties.push(kittyId);
+            delete escrowedIndexMap[msg.sender][kittyId];
         }
 
-        // Use tokenIndex as amuletId. 
+        // One we get powerValue calculated from 
+        // all escrowed kitties, let's forge a new amulet token
+
+        // Use ERC721 tokenIndex as amuletId. 
         uint256 amuletId = allTokens.length;
+       
+        // Calculate scaled amulate power
+        uint32 scaledAmulatePower = AMULATE_POWER_SCALE.mul(amuletPower.div(maxMaskValue));
 
         // Mint amulet
         _mint(msg.sender, amuletId);
         
         // Keep tokens
         amuletsMap[amuletId] = AmuletInfo({
-            amuletPower: amuletPower,
-            forgedKitties: escrowedKittiesMap[msg.sender]
+            amuletPower: scaledAmulatePower,
+            forgedKitties: forgedKitties
         });
 
         // Clear array for future deposited kitties
         // that will eventuually forge a new amulet.
-        escrowedKittiesMap[msg.sender] = [];
+        delete escrowedMap[msg.sender];
 
         emit LogAmuletForged(amuletId, msg.sender);
     }
@@ -145,6 +198,18 @@ contract AmuletToken is ERC721Token, Ownable {
      * to re-forge or withdraw.
      */
     function unforgeAmulet(uint256 _tokenId) public onlyOwnerOf {
+        uint256 escrowedLen = amuletsMap[amuletId].forgedKitties.length;
+
+        // Move unforged kitties to escrowed list
+        for (uint i = 0; i < escrowedLen; i++) {     
+            uint256 kitty = amuletsMap[amuletId].forgedKitties[i];
+
+            escrowedMap[msg.sender].push(kitty);
+            escrowedIndexMap[msg.sender][escrowedLen + i] = kitty;
+        }
+        
+        delete amuletsMap[amuletId];
+        
         _burn(msg.sender, _tokenId);
 
         emit LogAmuletUnForged(amuletId, msg.sender);
