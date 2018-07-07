@@ -1,6 +1,8 @@
 pragma solidity 0.4.24;
 
 import "./KittyCoreI.sol";
+import "../node_modules/openzeppelin-zos/contracts/math/Math.sol";
+import "../node_modules/openzeppelin-zos/contracts/ownership/Ownable.sol";
 import "../node_modules/openzeppelin-zos/contracts/token/ERC721/ERC721Token.sol";
 
 contract AmuletToken is ERC721Token, Ownable {
@@ -43,7 +45,11 @@ contract AmuletToken is ERC721Token, Ownable {
     uint32 maxMaskValue;
 
     // Scale fot amulate power value => (0 - AMULATE_POWER_SCALE)
-    uint256 constant AMULATE_POWER_SCALE = 10;
+    uint256 constant AMULATE_POWER_SCALE = 100;
+    
+    // Kitties limits in a forge operation 
+    uint16 constant MIN_REQUIRED_KITTIES = 2;
+    uint16 constant MAX_KITTIES_IN_FORGE = 10;
 
     // Arr of ERC721 held in escrow by user
     mapping(address => uint256[]) escrowedMap;
@@ -59,7 +65,6 @@ contract AmuletToken is ERC721Token, Ownable {
         kittyCore = KittyCoreI(_kittyCore);
     }
 
-
     /**
      * Adds or updates a gene mask
      * @param _mask value to add or update to gene masks mapping.
@@ -67,8 +72,9 @@ contract AmuletToken is ERC721Token, Ownable {
      * @param _value value used to calculate final amulate power value. 
      */
     function updateMask(uint256 _mask, uint256 _result, uint32 _value) public onlyOwner {            
+        // Check if we add a new mask
         if (maskInfoMap[_mask].maskValue == 0) {
-            maskInfoMap[_mask].maskIndex = masksArray.length;
+            maskInfoMap[_mask].maskIndex = uint32(masksArray.length);
             
             // Add to array
             masksArray.push(_mask);
@@ -111,13 +117,12 @@ contract AmuletToken is ERC721Token, Ownable {
      */
     function depositKitty(uint256 _kittyId) public {
         // Transfer this asset ownership
-        nfRegistry.transferFrom(msg.sender, address(this), _kittyId);
+        kittyCore.transferFrom(msg.sender, address(this), _kittyId);
 
-        // Add kittie to escrowed
-        uint256 lastIndex = escrowedMap[msg.sender].length;
-
-        escrowedIndexMap[msg.sender][_kittyId] = lastIndex;
+        // Add kittie to the end of escrowed array 
+        // and save array index in escrowedIndexMap. 
         escrowedMap[msg.sender].push(_kittyId);
+        escrowedIndexMap[msg.sender][_kittyId] = escrowedMap[msg.sender].length.sub(1);
 
         emit LogKittieDeposited(_kittyId, msg.sender);
     }
@@ -126,21 +131,22 @@ contract AmuletToken is ERC721Token, Ownable {
      * Withdraw kitty. Returns ownership to original depositor. 
      */
     function withdrawKitty(uint256 _kittyId) public {
-        uint256 index = escrowedIndexMap[msg.sender][_kittieId];
+        uint256 index = escrowedIndexMap[msg.sender][_kittyId];
         uint256 lastIndex = escrowedMap[msg.sender].length.sub(1);
 
         // Check if kitty is on escrow list
+        // This check wont work with kittie 0, but kittie 0 does not exists. 
         require(escrowedMap[msg.sender][index] > 0, "kitty not on escrow list");
 
         // Transfer ownership back to msg.sender
-        nfRegistry.transferFrom(address(this), msg.sender, _kittyId);
+        kittyCore.transferFrom(address(this), msg.sender, _kittyId);
         
         // Reorg escrowed array. 
         escrowedMap[msg.sender][index] = escrowedMap[msg.sender][lastIndex];
         escrowedMap[msg.sender][lastIndex] = 0;
         escrowedMap[msg.sender].length -= 1;
 
-        delete escrowedIndexMap[msg.sender][_kittieId];
+        delete escrowedIndexMap[msg.sender][_kittyId];
 
         emit LogKittieWithdrawed(_kittyId, msg.sender);
     }
@@ -149,22 +155,31 @@ contract AmuletToken is ERC721Token, Ownable {
      * Forge deposited kitties into a new Amulet granted to the msg.sender.
      */
     function forgeAmulet() public {
-        uint256 escrowedLen = escrowedMap[msg.sender].length;
+        uint256 escrowedLen = Math.max256(escrowedMap[msg.sender].length, MAX_KITTIES_IN_FORGE);
         
-        requires(escrowedLen > 0, "theres no deposited kitties to forge an amulet");
+        require(escrowedLen >= MIN_REQUIRED_KITTIES, "sender does not has MIN_REQUIRED_KITTIES on escrow");
 
-        uint32 amuletPower = 0;
-        uint256 storage forgedKitties = [];
+        uint256 amuletPower = 0;
+        uint256[] memory forgedKitties = new uint256[](escrowedLen);
 
         for (uint i = 0; i < escrowedLen; i++) {
             uint256 kittyId = escrowedMap[msg.sender][i];
 
             // Adds up all kitties' scores based on cattributes.
-            amuletPower += getKittyScore(kittyId);
+            amuletPower += _getKittyScore(kittyId);
 
             // Push to forged and remove from mappinig. 
             // We'll remove it from the escrowed array later. 
-            forgedKitties.push(kittyId);
+            forgedKitties[i] = kittyId;
+            
+            // Reorg escrowed Array
+            uint256 index = escrowedIndexMap[msg.sender][kittyId];
+            uint256 lastIndex = escrowedMap[msg.sender].length.sub(1);
+
+            escrowedMap[msg.sender][index] = escrowedMap[msg.sender][lastIndex];
+            escrowedMap[msg.sender][lastIndex] = 0;
+            escrowedMap[msg.sender].length -= 1;
+
             delete escrowedIndexMap[msg.sender][kittyId];
         }
 
@@ -175,7 +190,11 @@ contract AmuletToken is ERC721Token, Ownable {
         uint256 amuletId = allTokens.length;
        
         // Calculate scaled amulate power
-        uint32 scaledAmulatePower = AMULATE_POWER_SCALE.mul(amuletPower.div(maxMaskValue));
+        uint32 scaledAmulatePower = uint32(
+            AMULATE_POWER_SCALE.mul(
+                amuletPower.div(maxMaskValue)
+            )
+        );
 
         // Mint amulet
         _mint(msg.sender, amuletId);
@@ -186,40 +205,38 @@ contract AmuletToken is ERC721Token, Ownable {
             forgedKitties: forgedKitties
         });
 
-        // Clear array for future deposited kitties
-        // that will eventuually forge a new amulet.
-        delete escrowedMap[msg.sender];
-
         emit LogAmuletForged(amuletId, msg.sender);
     }
 
     /**
      * Unforge an amulete, leave all forged kitties available 
      * to re-forge or withdraw.
+     * Can only be called by the owner of the amulate token.
      */
-    function unforgeAmulet(uint256 _tokenId) public onlyOwnerOf {
-        uint256 escrowedLen = amuletsMap[amuletId].forgedKitties.length;
+    function unforgeAmulet(uint256 _amuletId) public onlyOwnerOf(_amuletId) {
+        uint256 escrowedLen = amuletsMap[_amuletId].forgedKitties.length;
 
         // Move unforged kitties to escrowed list
         for (uint i = 0; i < escrowedLen; i++) {     
-            uint256 kitty = amuletsMap[amuletId].forgedKitties[i];
+            uint256 kittyId = amuletsMap[_amuletId].forgedKitties[i];
 
-            escrowedMap[msg.sender].push(kitty);
-            escrowedIndexMap[msg.sender][escrowedLen + i] = kitty;
+            // Push into escrowedArray forged kitties. 
+            escrowedMap[msg.sender].push(kittyId);
+            escrowedIndexMap[msg.sender][escrowedLen + i] = kittyId;
         }
         
-        delete amuletsMap[amuletId];
+        delete amuletsMap[_amuletId];
         
-        _burn(msg.sender, _tokenId);
+        _burn(msg.sender, _amuletId);
 
-        emit LogAmuletUnForged(amuletId, msg.sender);
+        emit LogAmuletUnForged(_amuletId, msg.sender);
     }
 
     /**
      * Gets the kittie genes from KittiesCore contract and returns a 
      * value based on genes' masks configured values
      */
-    function getKittyScore(uint256 _kittyId) private view returns (uint8) {
+    function _getKittyScore(uint256 _kittyId) private view returns (uint32) {
         
         uint32 kittieScore = 0;
         uint256 kittieGenes;
@@ -230,10 +247,10 @@ contract AmuletToken is ERC721Token, Ownable {
         for (uint i = 0; i < masksArray.length; i++) {
             uint256 _mask = masksArray[i];
 
-            if (kittieGenes & _mask == maskArray[_mask].maskResult) {
-                kittieScore += maskArray[_mask].maskValue;
+            if (kittieGenes & _mask == maskInfoMap[_mask].maskResult) {
+                kittieScore += maskInfoMap[_mask].maskValue;
             }
         }
-        return amuletScore;
+        return kittieScore;
     }
 }

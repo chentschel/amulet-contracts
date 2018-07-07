@@ -2,7 +2,7 @@ pragma solidity 0.4.24;
 
 // Barebones interface to CryptoKitties contract
 contract KittyCoreI {
-    function getKitty(uint _id) public returns (
+    function getKitty(uint _id) external view returns (
         bool isGestating,
         bool isReady,
         uint256 cooldownIndex,
