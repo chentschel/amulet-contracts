@@ -7,7 +7,6 @@
     "test": "npx truffle test",
     "build": "bash bin/build.sh",
     "lint:sol": "solium -d contracts"
-
   },
   "repository": {
     "type": "git",
@@ -24,6 +23,7 @@
     "chai": "^4.1.2",
     "chai-as-promised": "^7.1.1",
     "chai-bignumber": "^2.0.2",
+    "dotenv": "^5.0.1",
     "solium": "^1.1.7",
     "zos": "^0.8.0"
   }
