@@ -36,7 +36,7 @@ contract AmuletToken is ERC721Token, Ownable {
     }
 
     // Gene mask mappings
-    mapping(uint256 => MaskInfo) maskInfoMap;
+    mapping(uint256 => MaskInfo) public maskInfoMap;
 
     // Array of configured masks
     uint256[] masksArray;
