@@ -1,11 +1,11 @@
-.idea
-.DS_Store
+# NPM modules
 node_modules
-dist/
-build/
-bundle.js
-geth.log
-.env.*
-.env
-zos.rinkeby.json
+
+# Truffle artifacts
+build
+
+# ZeppelinOS local artifacts
 zos.local.json
+
+# Deployment configuration
+.env
