@@ -61,7 +61,8 @@ contract AmuletToken is ERC721Token, Ownable {
     /**
      * Constructor
      */
-    constructor(address _kittyCore) public {
+    function initialize(address _sender, address _kittyCore) isInitializer("AmuletToken", "0.1.0") public {
+        Ownable.initialize(_sender);
         kittyCore = KittyCoreI(_kittyCore);
     }
 

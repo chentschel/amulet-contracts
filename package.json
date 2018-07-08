@@ -1,0 +1,24 @@
+{
+  "name": "kitties-amulet",
+  "version": "1.0.0",
+  "description": "Amulet ERC721 with forged CryptoKitties",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx truffle test",
+    "build": "bash bin/build.sh",
+    "lint:sol": "solium -d contracts"
+
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:chentschel/amulet-contracts.git"
+  },
+  "author": "Christian Hentschel",
+  "license": "ISC",
+  "dependencies": {
+    "openzeppelin-zos": "^1.9.1",
+    "truffle-hdwallet-provider": "0.0.5",
+    "zos": "^0.8.0",
+    "zos-lib": "^0.1.27"
+  }
+}

@@ -1,7 +1,9 @@
 {
   "name": "kitties-amulet",
   "version": "0.1.0",
-  "contracts": {},
+  "contracts": {
+    "AmuletToken": "AmuletToken"
+  },
   "stdlib": {
     "name": "openzeppelin-zos",
     "version": "1.9.1"
