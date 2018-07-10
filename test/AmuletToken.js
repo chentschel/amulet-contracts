@@ -34,7 +34,6 @@ function checkUnForgeEvent(log, amuletId, unforger) {
   log.args.owner.should.be.equal(unforger);
 }
 
-
 contract('AmuletToken', ([_, owner, aWallet, someone, anotherone]) => {
   
   const txParams = {};
@@ -167,7 +166,7 @@ contract('AmuletToken', ([_, owner, aWallet, someone, anotherone]) => {
       checkForgeEvent(logs[1], someone);
     });
 
-    it('Should check correct escrowed kitties', async () => {
+    it('Should CHECK CORRECT ESCROWED kitties', async () => {
       const escrowedIds = await contract.getEscrowedIds(someone);
 
       // There should be just one kitty unforged (kittyId = 1)
@@ -175,7 +174,7 @@ contract('AmuletToken', ([_, owner, aWallet, someone, anotherone]) => {
       escrowedIds[0].should.be.bignumber.equal(1);
     });
 
-    it('Should check correct forged kitties', async () => {
+    it('Should CHECK CORRECT FORGED kitties', async () => {
       const amuletId = 0;
       const forgedArray = await contract.getForgetForAmulet(amuletId);
       
@@ -192,12 +191,20 @@ contract('AmuletToken', ([_, owner, aWallet, someone, anotherone]) => {
     it('Should UNFORGE amulet', async () => {
       const amuletId = 0;
       
-      const { logs } = await contract.unforgeAmulet(amuletId);      
-      checkUnForgeEvent(logs[0], someone);
+      const { logs } = await contract.unforgeAmulet(amuletId, { from: someone }); 
+      
+      // logs[0] == Transfer envent. 
+      checkUnForgeEvent(logs[1], amuletId, someone);
     });
 
-    it('Should UNFORGE amulet', async () => {
-      console.log('sss');
+    it('Should CHECK CORRECT ESCROWED kitties', async () => {
+      const escrowedIds = await contract.getEscrowedIds(someone);
+
+      // There should be 11 kitty escrowed (kitty ids 1 to 11)
+      escrowedIds.should.have.lengthOf(11);
+      escrowedIds[0].should.be.bignumber.equal(1);
+      escrowedIds[1].should.be.bignumber.equal(11);
+      escrowedIds[10].should.be.bignumber.equal(2);
     });
   });
   

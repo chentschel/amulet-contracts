@@ -270,21 +270,24 @@ contract AmuletToken is Ownable, ERC721Token {
      * @param _amuletId to unuforge
      */
     function unforgeAmulet(uint256 _amuletId) public onlyOwnerOf(_amuletId) {
-        uint256 escrowedLen = amuletsMap[_amuletId].forgedKitties.length;
+        uint256 forgedLen = amuletsMap[_amuletId].forgedKitties.length;
+        uint256 escrowedLen = escrowedMap[msg.sender].length;
 
-        // Move unforged kitties to escrowed list
-        for (uint i = 0; i < escrowedLen; i++) {     
+        // Move forged kitties to escrowed list
+        for (uint i = 0; i < forgedLen; i++) {
             uint256 kittyId = amuletsMap[_amuletId].forgedKitties[i];
 
             // Push into escrowedArray forged kitties. 
             escrowedMap[msg.sender].push(kittyId);
-            escrowedIndexMap[msg.sender][escrowedLen + i].isIndexed = true;
-            escrowedIndexMap[msg.sender][escrowedLen + i].arrayIndex = kittyId;
+
+            escrowedIndexMap[msg.sender][kittyId].isIndexed = true;
+            escrowedIndexMap[msg.sender][kittyId].arrayIndex = escrowedLen + i;
         }
-        
-        delete amuletsMap[_amuletId];
-        
+        // Burn amulet
         _burn(msg.sender, _amuletId);
+        
+        // Remove info map
+        delete amuletsMap[_amuletId];
 
         emit LogAmuletUnForged(_amuletId, msg.sender);
     }
