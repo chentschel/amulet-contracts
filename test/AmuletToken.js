@@ -190,7 +190,14 @@ contract('AmuletToken', ([_, owner, aWallet, someone, anotherone]) => {
     });
 
     it('Should UNFORGE amulet', async () => {
-      //checkUnForgeEvent(logs[0], someone);
+      const amuletId = 0;
+      
+      const { logs } = await contract.unforgeAmulet(amuletId);      
+      checkUnForgeEvent(logs[0], someone);
+    });
+
+    it('Should UNFORGE amulet', async () => {
+      console.log('sss');
     });
   });
   
