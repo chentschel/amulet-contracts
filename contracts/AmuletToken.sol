@@ -97,6 +97,28 @@ contract AmuletToken is Ownable, ERC721Token {
         maskInfoMap[_mask].maskResult = _result;
     }
 
+
+    /**
+     * Bulk adds or updates a gene mask
+     * @param _masks array of values to add or update to gene masks mapping.
+     * @param _results array of values after mask applied to a kittie gene.
+     * @param _values array of values used to calculate final amulate power value. 
+     */
+    function bulkUpdateMasks(
+        uint256[] _masks, 
+        uint256[] _results, 
+        uint32[] _values
+    ) 
+        public onlyOwner 
+    {
+        require(_masks.length == _values.length, "values should equal mask array length");
+        require(_masks.length == _results.length, "results should equal mask array length");
+
+        for (uint i = 0; i < _masks.length; i++) {
+            updateMask(_masks[i], _results[i], _values[i]);
+        }
+    }
+
     /**
      * Remove genes mask from mappings
      * @param _mask value to remove from mapping.
@@ -298,6 +320,13 @@ contract AmuletToken is Ownable, ERC721Token {
      */
     function getForgetForAmulet(uint256 _amuletId) public view returns (uint256[]) {
         return amuletsMap[_amuletId].forgedKitties;
+    }
+
+    /**
+     * Gets owned amulet ids for this msg.sender
+     */
+    function getOwnedAmulets() public view returns (uint256[]) {
+        return ownedTokens[msg.sender];
     }
 
     /**

@@ -28,7 +28,7 @@ zos add AmuletToken -v
 # NOTE: Creates another zos.<network_name>.json file, specific to the network used, which keeps track of deployed addresses, etc.
 zos push --from $OWNER --network $NETWORK --skip-compile -v
 
-# Request a proxy for the upgradeably Basil.sol
+# Request a proxy for the upgradeably AmuletToken.sol
 # NOTE: A dapp could now use the address of the proxy specified in zos.<network_name>.json
 zos create AmuletToken --from $OWNER --args $OWNER --network $NETWORK -v
 

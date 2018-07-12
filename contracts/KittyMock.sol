@@ -1,7 +1,5 @@
 pragma solidity 0.4.24;
 
-import "./KittyCoreI.sol";
-
 contract KittyMock {
 
     mapping(uint256 => address) kittiesMap;
